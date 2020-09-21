@@ -1,43 +1,66 @@
+import * as express from 'express';
+import * as cors from 'cors';
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 
-admin.initializeApp();
+const DEFAULT_DOC = {
+  clap: 0,
+  think: 0
+};
+
+admin.initializeApp(functions.config().firebase);
+
+const app = express();
+app.use(cors({ origin: true }));
 
 const db = admin.firestore();
 const collection = db.collection('reflex');
 const increment = admin.firestore.FieldValue.increment(1);
 
-// // Start writing Firebase Functions
-// // https://firebase.google.com/docs/functions/typescript
+const getStatus = async (request: any, response: any) => {
+  const docRef = collection.doc('test');
+  const doc = await docRef.get();
 
-export const reflex = {
-  getStatus: functions.https.onRequest(async (request, response) => {
-    const docRef = collection.doc('test');
-    const doc = await docRef.get();
-
-    response.send({
-      success: doc.exists,
-      data: doc.exists ? doc.data() : null
-    }); 
-  }),
-  action: functions.https.onRequest(async(request, response) => {
-    const docRef = collection.doc('test');
-    const type = request.query['type'] || '';
-    console.log('query', request.query);
-    if (request.method === 'GET' && type === 'clap') {
-      await docRef.update({ clap:  increment});
-      const doc = await docRef.get();
-      console.log('doc response', doc.data());
-      response.send({
-        success: true,
-        data: doc.data()
-      }); 
-    } else {
-      response.send({
-        success: false,
-        data: null
-      })
-    }
-  }
-  )
+  response.send({
+    success: doc.exists,
+    data: doc.exists ? doc.data() : null
+  }); 
 }
+
+const updateStatus = async (request: any, response: any) => {
+  const type = request.body['type'] || '';
+  const postId = request.params['postId'] || 'test';
+  const docRef = collection.doc(postId);
+
+  console.log('DOC', postId, docRef);
+  let success = false;
+  let data = null;
+  let doc = null;
+
+  if (!!type) {
+    doc = await docRef.get();
+    if (!doc.exists) {
+      // TODO: combine with UPDATE
+      await docRef.create(DEFAULT_DOC);
+      console.log(`Collection doc  ${postId} added!`);
+    }
+
+    try {
+      await docRef.update({ [type]: increment}); 
+      success = true;
+    } catch(ex) {
+      console.warn('Update was unsuccessful!', ex);
+    }
+
+    doc = await docRef.get();
+    data = doc.data();
+  }
+
+  response.send({ success, data })
+}
+
+app.get('/', getStatus);
+app.post('/', updateStatus);
+app.post('/:postId', updateStatus);
+
+export const reaction = functions.https.onRequest(app);

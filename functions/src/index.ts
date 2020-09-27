@@ -17,7 +17,7 @@ const db = admin.firestore();
 const collection = db.collection('reflex');
 const increment = admin.firestore.FieldValue.increment(1);
 
-const getStatus = async (request: any, response: any) => {
+export const getStatus = async (request: any, response: any) => {
   const docRef = collection.doc('test');
   const doc = await docRef.get();
 
